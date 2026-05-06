@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pedigree Tree</title>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+    font-family:Arial,sans-serif;
+    background:#0a0e1a;
+    overflow:hidden;
+    height:100vh;
+}
+
+.header{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    background:rgba(15,20,35,.95);
+    padding:12px 24px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    z-index:100;
+    border-bottom:1px solid rgba(0,255,255,.15);
+    flex-wrap:wrap;
+    gap:10px;
+}
+
+.logo{
+    font-size:1.2rem;
+    font-weight:600;
+    color:#00ffff;
+}
+
+.controls{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    flex-wrap:wrap;
+}
+
+.upload-btn,
+.reset-layout-btn,
+.mode-btn,
+.find-path-btn{
+    background:linear-gradient(135deg,#00ffff,#a855f7);
+    color:#0a0e1a;
+    padding:6px 16px;
+    border-radius:20px;
+    cursor:pointer;
+    font-size:12px;
+    border:none;
+    font-weight:600;
+}
+
+.find-path-btn{
+    background:linear-gradient(135deg,#ff6b6b,#a855f7);
+}
+
+.mode-btn.active{
+    outline:2px solid #fff;
+}
+
+#toggleSpouseBtn{
+    background:rgba(0,255,255,0.2);
+    color:#00ffff;
+}
+
+.search-container{
+    position:relative;
+    display:flex;
+    align-items:center;
+    background:rgba(255,255,255,.05);
+    border-radius:20px;
+    padding:4px 12px;
+}
+
+.search-container input{
+    background:none;
+    border:none;
+    color:#fff;
+    font-size:12px;
+    width:180px;
+    outline:none;
+}
+
+.search-icon{
+    color:#00ffff;
+    margin-right:6px;
+}
+
+.search-results{
+    position:absolute;
+    top:100%;
+    left:0;
+    right:0;
+    background:#131724;
+    border-radius:8px;
+    margin-top:4px;
+    max-height:250px;
+    overflow-y:auto;
+    display:none;
+    z-index:1000;
+    border:1px solid rgba(0,255,255,.2);
+}
+
+.search-result-item{
+    padding:8px 12px;
+    cursor:pointer;
+    font-size:12px;
+    color:#fff;
+}
+
+.search-result-item:hover{
+    background:rgba(0,255,255,.1);
+}
+
+.depth-selector{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    background:rgba(0,0,0,.5);
+    padding:4px 12px;
+    border-radius:20px;
+}
+
+.depth-selector label{
+    font-size:11px;
+    color:#00ffff;
+}
+
+.depth-number{
+    background:#1a1f2e;
+    border:1px solid #00ffff;
+    border-radius:20px;
+    padding:3px 6px;
+    color:#00ffff;
+    font-size:11px;
+    width:60px;
+    text-align:center;
+}
+
+.stats{
+    background:rgba(255,255,255,.05);
+    padding:4px 12px;
+    border-radius:20px;
+    font-size:11px;
+    color:#00ffff;
+}
+
+#graph-container{
+    position:fixed;
+    top:60px;
+    left:0;
+    right:0;
+    bottom:0;
+    overflow:hidden;
+}
+
+svg{
+    width:100%;
+    height:100%;
+    background:#0a0e1a;
+}
+
+.node-group{
+    cursor:grab;
+}
+
+.node-group:active{
+    cursor:grabbing;
+}
+
+.link-parent-union{
+    stroke:#eca03f;
+    stroke-width:2.5;
+    fill:none;
+    stroke-dasharray:6,5;
+    stroke-linecap:round;
+    opacity:.9;
+}
+
+.link-union-child{
+    stroke:#39FF14;
+    stroke-width:2.5;
+    fill:none;
+    stroke-linecap:round;
+    opacity:.9;
+}
+
+.link-path-highlight{
+    stroke:#ff0066;
+    stroke-width:4;
+    fill:none;
+    stroke-linecap:round;
+    filter:drop-shadow(0 0 5px #ff0066);
+}
+
+.links-container path{
+    pointer-events:none;
+}
+
+.toast{
+    position:fixed;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.9);
+    padding:8px 16px;
+    border-radius:20px;
+    font-size:12px;
+    z-index:1000;
+    display:none;
+    border:1px solid #00ffff;
+    color:#fff;
+}
+
+.floating-controls{
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    z-index:100;
+}
+
+.float-btn{
+    width:38px;
+    height:38px;
+    background:rgba(19,23,36,.95);
+    border:1px solid rgba(0,255,255,.3);
+    border-radius:50%;
+    color:#00ffff;
+    cursor:pointer;
+    font-size:16px;
+}
+
+.sidebar{
+    position:fixed;
+    top:60px;
+    right:0;
+    width:350px;
+    height:calc(100vh - 60px);
+    background:rgba(19,23,36,.98);
+    backdrop-filter:blur(12px);
+    border-left:1px solid rgba(0,255,255,.2);
+    transform:translateX(100%);
+    transition:transform .3s;
+    z-index:150;
+    display:flex;
+    flex-direction:column;
+}
+
+.sidebar.open{
+    transform:translateX(0);
+}
+
+.sidebar-header{
+    padding:16px;
+    border-bottom:1px solid rgba(255,255,255,.1);
+    display:flex;
+    justify-content:space-between;
+}
+
+.sidebar-header h3{
+    color:#00ffff;
+    font-size:1rem;
+}
+
+.close-sidebar{
+    background:none;
+    border:none;
+    color:#fff;
+    font-size:20px;
+    cursor:pointer;
+}
+
+.sidebar-content{
+    flex:1;
+    overflow-y:auto;
+    padding:16px;
+}
+
+.person-card{
+    text-align:center;
+    margin-bottom:20px;
+}
+
+.person-avatar{
+    width:60px;
+    height:60px;
+    background:linear-gradient(135deg,#00ffff,#a855f7);
+    border-radius:50%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:28px;
+    margin-bottom:12px;
+}
+
+.person-name{
+    font-size:1.1rem;
+    font-weight:600;
+    margin-bottom:4px;
+    color:#fff;
+}
+
+.person-dates{
+    font-size:11px;
+    color:rgba(255,255,255,.6);
+}
+
+.btn-primary{
+    width:100%;
+    padding:10px;
+    background:linear-gradient(135deg,#00ffff,#a855f7);
+    border:none;
+    border-radius:8px;
+    color:#0a0e1a;
+    font-weight:600;
+    cursor:pointer;
+    margin-top:12px;
+}
+
+.info-section{
+    margin:16px 0;
+    padding:12px 0;
+    border-top:1px solid rgba(255,255,255,.1);
+}
+
+.info-label{
+    font-size:10px;
+    text-transform:uppercase;
+    color:#00ffff;
+    margin-bottom:8px;
+}
+
+.relation-list{
+    list-style:none;
+}
+
+.relation-list li{
+    padding:6px 10px;
+    margin:4px 0;
+    background:rgba(255,255,255,.05);
+    border-radius:6px;
+    cursor:pointer;
+    font-size:12px;
+    color:#fff;
+}
+
+.relation-list li:hover{
+    background:#00ffff;
+    color:#0a0e1a;
+}
+
+.path-result{
+    margin-top:16px;
+    padding:12px;
+    background:rgba(0,255,255,.1);
+    border-radius:8px;
+    border-left:3px solid #ff0066;
+    font-size:12px;
+    color:#fff;
+}
+
+.path-result strong{
+    color:#ff0066;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+
+    <div class="logo">🌳 Pedigree Tree</div>
+
+    <div class="controls">
+
+        <input type="file" id="gedcomInput" accept=".ged" style="display:none;">
+
+        <button class="upload-btn"
+                onclick="document.getElementById('gedcomInput').click()">
+            📂 Load GEDCOM
+        </button>
+
+        <button id="ancestorBtn"
+                class="mode-btn active"
+                onclick="setMode('ancestors')">
+            ⬆ Ancestors
+        </button>
+
+        <button id="descendantBtn"
+                class="mode-btn"
+                onclick="setMode('descendants')">
+            ⬇ Descendants
+        </button>
+
+        <button id="toggleSpouseBtn" class="mode-btn">
+            👥 Show Spouse
+        </button>
+
+        <button class="find-path-btn" onclick="openPathFinder()">
+            🔗 Find Connection
+        </button>
+
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+
+            <input type="text"
+                   id="searchInput"
+                   placeholder="Search person...">
+
+            <div id="searchResults" class="search-results"></div>
+        </div>
+
+        <div class="depth-selector">
+            <label>📐 Generations:</label>
+
+            <input type="number"
+                   id="depthInput"
+                   class="depth-number"
+                   value="5"
+                   min="1"
+                   max="100">
+        </div>
+
+        <button class="reset-layout-btn"
+                onclick="resetLayout()">
+            ⟳ Reset Layout
+        </button>
+
+        <div class="stats" id="stats">Ready</div>
+
+    </div>
+</div>
+
+<div id="graph-container">
+    <svg id="tree-svg"></svg>
+</div>
+
+<div class="floating-controls">
+    <button class="float-btn" onclick="zoomIn()">+</button>
+    <button class="float-btn" onclick="zoomOut()">-</button>
+    <button class="float-btn" onclick="fitToView()">⛶</button>
+    <button class="float-btn" onclick="resetView()">⟳</button>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div class="sidebar" id="sidebar">
+
+    <div class="sidebar-header">
+        <h3>👤 Person Details</h3>
+
+        <button class="close-sidebar"
+                onclick="closeSidebar()">
+            ✕
+        </button>
+    </div>
+
+    <div class="sidebar-content" id="sidebarContent">
+        <div style="text-align:center;padding:40px;color:white;">
+            Select a person
+        </div>
+    </div>
+
+</div>
+
+<script>
+
+let svg;
+let linkContainer;
+let nodeContainer;
+
+let currentGraphData = null;
+let currentPositions = new Map();
+let currentRootId = null;
+let allPeople = [];
+let currentPersonData = null;
+let allPeopleMap = new Map();
+
+let currentMode = 'ancestors';
+let includeSpouseInView = true;
+
+let zoomTransform = d3.zoomIdentity;
+
+let pathFinderPerson1 = null;
+let pathFinderPerson2 = null;
+
+const zoom = d3.zoom().scaleExtent([0.05,3]);
+
+// Increased node size for wrapping text
+const NODE_WIDTH = 170;
+const NODE_HEIGHT = 60;
+const UNION_RADIUS = 8;
+
+function initSVG(){
+
+    svg = d3.select("#tree-svg");
+
+    linkContainer = svg.append("g")
+        .attr("class","links-container");
+
+    nodeContainer = svg.append("g")
+        .attr("class","nodes-container");
+
+    zoom.on("zoom",(event)=>{
+
+        zoomTransform = event.transform;
+
+        linkContainer.attr("transform",zoomTransform);
+
+        nodeContainer.attr("transform",zoomTransform);
+
+    });
+
+    svg.call(zoom);
+
+    resetView();
+}
+
+function zoomIn(){
+
+    zoomTransform = zoomTransform.scale(1.3);
+
+    svg.transition()
+        .duration(300)
+        .call(zoom.transform,zoomTransform);
+}
+
+function zoomOut(){
+
+    zoomTransform = zoomTransform.scale(.7);
+
+    svg.transition()
+        .duration(300)
+        .call(zoom.transform,zoomTransform);
+}
+
+function resetView(){
+
+    const container =
+        document.getElementById("graph-container");
+
+    const rect =
+        container.getBoundingClientRect();
+
+    zoomTransform =
+        d3.zoomIdentity
+            .translate(rect.width/2,rect.height/2)
+            .scale(.5);
+
+    svg.transition()
+        .duration(300)
+        .call(zoom.transform,zoomTransform);
+}
+
+function fitToView(){
+
+    if(!nodeContainer.node()) return;
+
+    const bbox =
+        nodeContainer.node().getBBox();
+
+    if(bbox.width === 0) return;
+
+    const container =
+        document.getElementById("graph-container");
+
+    const rect =
+        container.getBoundingClientRect();
+
+    const scale =
+        Math.min(
+            rect.width/(bbox.width+100),
+            rect.height/(bbox.height+100),
+            1.2
+        );
+
+    const x =
+        rect.width/2 -
+        (bbox.x+bbox.width/2)*scale;
+
+    const y =
+        rect.height/2 -
+        (bbox.y+bbox.height/2)*scale;
+
+    zoomTransform =
+        d3.zoomIdentity
+            .translate(x,y)
+            .scale(scale);
+
+    svg.transition()
+        .duration(500)
+        .call(zoom.transform,zoomTransform);
+}
+
+function setMode(mode){
+
+    currentMode = mode;
+
+    document.getElementById('ancestorBtn')
+        .classList.toggle('active',mode==='ancestors');
+
+    document.getElementById('descendantBtn')
+        .classList.toggle('active',mode==='descendants');
+
+    if(currentRootId){
+
+        loadGraphWithSpouse(
+            currentRootId,
+            parseInt(document.getElementById('depthInput').value),
+            includeSpouseInView
+        );
+    }
+}
+
+function resetLayout(){
+
+    if(currentGraphData){
+
+        if(currentMode === 'descendants'){
+            currentPositions =
+                calculateDescendantTopDownLayout(
+                    currentGraphData.nodes,
+                    currentGraphData.edges,
+                    currentRootId
+                );
+        }else{
+            currentPositions =
+                calculateLayout(
+                    currentGraphData.nodes,
+                    currentGraphData.edges,
+                    currentRootId
+                );
+        }
+
+        renderAll();
+
+        showToast("Layout reset",1500);
+    }
+}
+
+// Helper function to wrap text into multiple lines
+function wrapText(text, maxLineLength) {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+    
+    for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        
+        if (testLine.length <= maxLineLength) {
+            currentLine = testLine;
+        } else {
+            if (currentLine) lines.push(currentLine);
+            currentLine = word;
+        }
+    }
+    if (currentLine) lines.push(currentLine);
+    
+    return lines;
+}
+
+// Format date to DD/MM/YYYY or just year
+function formatDisplayDate(dateStr) {
+    if (!dateStr || dateStr === "") return null;
+    let raw = String(dateStr).trim();
+    
+    if (raw.includes('/')) return raw;
+    
+    let monthMap = {
+        'JAN':'01', 'FEB':'02', 'MAR':'03', 'APR':'04', 'MAY':'05', 'JUN':'06',
+        'JUL':'07', 'AUG':'08', 'SEP':'09', 'OCT':'10', 'NOV':'11', 'DEC':'12'
+    };
+    let parts = raw.split(' ');
+    if (parts.length === 3 && parts[1] && monthMap[parts[1].toUpperCase()]) {
+        let day = parts[0].padStart(2,'0');
+        let month = monthMap[parts[1].toUpperCase()];
+        let year = parts[2];
+        return `${day}/${month}/${year}`;
+    }
+    
+    let isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+        let year = isoMatch[1];
+        let month = isoMatch[2];
+        let day = isoMatch[3];
+        return `${day}/${month}/${year}`;
+    }
+    
+    let yearMatch = raw.match(/^(\d{4})/);
+    if (yearMatch) {
+        return yearMatch[1];
+    }
+    
+    return raw;
+}
+
+function drawCurvedPath(sourcePos,targetPos,isParentToUnion){
+
+    const BOX_HALF_HEIGHT = NODE_HEIGHT/2;
+
+    let startX = sourcePos.x;
+    let startY = sourcePos.y;
+
+    let endX = targetPos.x;
+    let endY = targetPos.y;
+
+    if(isParentToUnion){
+
+        startY += BOX_HALF_HEIGHT;
+        endY -= UNION_RADIUS;
+
+    }else{
+
+        startY += UNION_RADIUS;
+        endY -= BOX_HALF_HEIGHT;
+    }
+
+    const deltaY = Math.abs(endY-startY);
+
+    const curve =
+        Math.max(40,Math.min(140,deltaY*.45));
+
+    return `
+        M ${startX} ${startY}
+        C ${startX} ${startY+curve},
+          ${endX} ${endY-curve},
+          ${endX} ${endY}
+    `;
+}
+
+// BFS to find path between two people
+async function findConnection(person1Id, person2Id) {
+    showToast(`Finding connection...`, 2000);
+    
+    const graph = new Map();
+    for (const [id, person] of allPeopleMap) {
+        if (!graph.has(id)) graph.set(id, new Set());
+    }
+    for (const [id, person] of allPeopleMap) {
+        for (const parent of person.parents || []) {
+            if (graph.has(parent.id)) {
+                graph.get(id).add(parent.id);
+                graph.get(parent.id).add(id);
+            }
+        }
+        for (const spouse of person.spouses || []) {
+            if (graph.has(spouse.id)) {
+                graph.get(id).add(spouse.id);
+                graph.get(spouse.id).add(id);
+            }
+        }
+    }
+    
+    const queue = [[person1Id, [person1Id]]];
+    const visited = new Set([person1Id]);
+    
+    while (queue.length > 0) {
+        const [current, path] = queue.shift();
+        if (current === person2Id) {
+            highlightPath(path);
+            const relationship = describeRelationship(path);
+            showToast(`Connection found! ${path.length - 1} steps`, 3000);
+            showPathInSidebar(path, relationship);
+            return path;
+        }
+        for (const neighbor of graph.get(current) || []) {
+            if (!visited.has(neighbor)) {
+                visited.add(neighbor);
+                queue.push([neighbor, [...path, neighbor]]);
+            }
+        }
+    }
+    showToast(`No connection found`, 3000);
+    return null;
+}
+
+function describeRelationship(path) {
+    if (path.length < 2) return "Same person";
+    const relationships = [];
+    for (let i = 0; i < path.length - 1; i++) {
+        const person1 = allPeopleMap.get(path[i]);
+        const person2 = allPeopleMap.get(path[i + 1]);
+        const isParent1 = person1.children?.some(c => c.id === path[i + 1]);
+        const isParent2 = person2.children?.some(c => c.id === path[i]);
+        if (isParent1) {
+            relationships.push(`${person1.name} → parent of → ${person2.name}`);
+        } else if (isParent2) {
+            relationships.push(`${person2.name} → parent of → ${person1.name}`);
+        } else if (person1.spouses?.some(s => s.id === path[i + 1])) {
+            relationships.push(`${person1.name} ↔ spouse of ↔ ${person2.name}`);
+        } else {
+            relationships.push(`${person1.name} ↔ ${person2.name}`);
+        }
+    }
+    return relationships.join(" → then → ");
+}
+
+function highlightPath(path) {
+    linkContainer.selectAll(".link-path-highlight").remove();
+    const edges = currentGraphData?.edges || [];
+    for (let i = 0; i < path.length - 1; i++) {
+        const sourceId = path[i];
+        const targetId = path[i + 1];
+        let edge = edges.find(e => 
+            (e.source === sourceId && e.target === targetId) ||
+            (e.source === targetId && e.target === sourceId)
+        );
+        if (edge) {
+            const sourcePos = currentPositions.get(edge.source);
+            const targetPos = currentPositions.get(edge.target);
+            if (sourcePos && targetPos) {
+                const isParentToUnion = edge.type === 'parent-union';
+                const pathD = drawCurvedPath(sourcePos, targetPos, isParentToUnion);
+                linkContainer.append("path")
+                    .attr("class", "link-path-highlight")
+                    .attr("d", pathD);
+            }
+        }
+    }
+    nodeContainer.selectAll(".node-group").each(function(d) {
+        const nodeId = d3.select(this).datum()?.id;
+        if (nodeId && path.includes(nodeId)) {
+            d3.select(this).select("rect")
+                .attr("stroke", "#ff0066")
+                .attr("stroke-width", 4);
+        }
+    });
+}
+
+function showPathInSidebar(path, relationship) {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarContent = document.getElementById('sidebarContent');
+    const pathHtml = `
+        <div class="info-section">
+            <div class="info-label">🔗 Connection Path</div>
+            <div class="path-result">
+                <strong>Path length:</strong> ${path.length - 1} steps<br><br>
+                <strong>Path:</strong><br>
+                ${path.map((id, idx) => {
+                    const person = allPeopleMap.get(id);
+                    return `${idx + 1}. ${person?.name || id}`;
+                }).join('<br>')}
+                <br><br>
+                <strong>Relationship:</strong><br>
+                ${relationship}
+            </div>
+        </div>
+    `;
+    if (!sidebarContent.innerHTML.includes('Connection Path')) {
+        sidebarContent.innerHTML += pathHtml;
+    }
+    sidebar.classList.add('open');
+}
+
+function openPathFinder() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarContent = document.getElementById('sidebarContent');
+    sidebarContent.innerHTML = `
+        <div class="info-section">
+            <div class="info-label">🔗 Find Connection Between Two People</div>
+            <div class="person-card" style="margin-bottom:20px;">
+                <div class="info-label">Person 1</div>
+                <div id="pathPerson1Display" style="padding:10px;background:rgba(255,255,255,.05);border-radius:8px;margin-top:5px;">Not selected</div>
+                <input type="text" id="pathSearch1" placeholder="Search person 1..." style="width:100%;margin-top:10px;padding:6px;background:#1a1f2e;border:1px solid #00ffff;color:#fff;border-radius:6px;">
+                <div id="pathResults1" class="search-results" style="display:none;position:static;margin-top:5px;"></div>
+            </div>
+            <div class="person-card" style="margin-bottom:20px;">
+                <div class="info-label">Person 2</div>
+                <div id="pathPerson2Display" style="padding:10px;background:rgba(255,255,255,.05);border-radius:8px;margin-top:5px;">Not selected</div>
+                <input type="text" id="pathSearch2" placeholder="Search person 2..." style="width:100%;margin-top:10px;padding:6px;background:#1a1f2e;border:1px solid #00ffff;color:#fff;border-radius:6px;">
+                <div id="pathResults2" class="search-results" style="display:none;position:static;margin-top:5px;"></div>
+            </div>
+            <button class="btn-primary" onclick="findSelectedConnection()" style="margin-top:10px;">🔍 Find Connection</button>
+            <button class="btn-primary" onclick="clearPathHighlights()" style="margin-top:10px;background:rgba(255,0,0,0.2);">🧹 Clear Highlights</button>
+        </div>
+    `;
+    setupPathSearch('pathSearch1', 'pathResults1', 1);
+    setupPathSearch('pathSearch2', 'pathResults2', 2);
+    sidebar.classList.add('open');
+}
+
+function setupPathSearch(searchId, resultsId, personNum) {
+    const search = document.getElementById(searchId);
+    const results = document.getElementById(resultsId);
+    search.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        if (query.length < 2) { results.style.display = 'none'; return; }
+        const matches = allPeople.filter(p => p.name.toLowerCase().includes(query)).slice(0, 10);
+        if (matches.length) {
+            results.innerHTML = matches.map(p => `<div class="search-result-item" onclick="selectPathPerson(${personNum}, '${p.id}', '${escapeHtml(p.name)}')"><strong>${escapeHtml(p.name)}</strong> ${p.birth ? '(' + p.birth + ')' : ''}</div>`).join('');
+            results.style.display = 'block';
+        } else {
+            results.innerHTML = '<div class="search-result-item">No matches</div>';
+            results.style.display = 'block';
+        }
+    });
+}
+
+function selectPathPerson(personNum, id, name) {
+    if (personNum === 1) {
+        pathFinderPerson1 = { id, name };
+        document.getElementById('pathPerson1Display').innerHTML = `✅ ${escapeHtml(name)}`;
+        document.getElementById('pathResults1').style.display = 'none';
+        document.getElementById('pathSearch1').value = '';
+    } else {
+        pathFinderPerson2 = { id, name };
+        document.getElementById('pathPerson2Display').innerHTML = `✅ ${escapeHtml(name)}`;
+        document.getElementById('pathResults2').style.display = 'none';
+        document.getElementById('pathSearch2').value = '';
+    }
+}
+
+async function findSelectedConnection() {
+    if (!pathFinderPerson1 || !pathFinderPerson2) {
+        showToast('Please select both people first', 2000);
+        return;
+    }
+    await findConnection(pathFinderPerson1.id, pathFinderPerson2.id);
+}
+
+function clearPathHighlights() {
+    linkContainer.selectAll(".link-path-highlight").remove();
+    nodeContainer.selectAll(".node-group").each(function(d) {
+        d3.select(this).select("rect")
+            .attr("stroke", "#7fb0ff")
+            .attr("stroke-width", 2);
+    });
+    showToast('Highlights cleared', 1500);
+}
+
+// Layout functions (simplified but functional)
+function calculateDescendantTopDownLayout(nodes, edges, rootId) {
+    const positions = new Map();
+    const LEVEL_Y = 220;
+    const NODE_GAP = NODE_WIDTH + 70;
+    
+    const nodeMap = new Map(); nodes.forEach(n => nodeMap.set(n.id, n));
+    const children = new Map(); const parents = new Map();
+    nodes.forEach(n => { children.set(n.id, []); parents.set(n.id, []); });
+    edges.forEach(e => { children.get(e.source).push(e.target); parents.get(e.target).push(e.source); });
+    
+    const level = new Map(); level.set(rootId, 0);
+    const queue = [rootId];
+    while (queue.length) {
+        const id = queue.shift(); const l = level.get(id);
+        for (const c of children.get(id) || []) {
+            let nextLevel = l;
+            if (nodeMap.get(id)?.type === 'individual' && nodeMap.get(c)?.type === 'union') nextLevel = l + 0.5;
+            else if (nodeMap.get(id)?.type === 'union' && nodeMap.get(c)?.type === 'individual') nextLevel = l + 0.5;
+            else nextLevel = l + 1;
+            if (!level.has(c) || level.get(c) < nextLevel) { level.set(c, nextLevel); queue.push(c); }
+        }
+    }
+    
+    const nodesByLevel = new Map();
+    nodes.forEach(n => { const l = level.get(n.id) || 0; if (!nodesByLevel.has(l)) nodesByLevel.set(l, []); nodesByLevel.get(l).push(n); });
+    const sortedLevels = [...nodesByLevel.keys()].sort((a,b)=>a-b);
+    
+    const rootNodes = nodesByLevel.get(0) || [];
+    let rootWidth = (rootNodes.length - 1) * NODE_GAP;
+    rootNodes.forEach((node, idx) => positions.set(node.id, { x: -rootWidth/2 + idx * NODE_GAP, y: 0 }));
+    
+    for (const currentLevel of sortedLevels) {
+        if (currentLevel === 0) continue;
+        const nodesAtLevel = nodesByLevel.get(currentLevel);
+        const desiredX = new Map();
+        for (const node of nodesAtLevel) {
+            let sum = 0, cnt = 0;
+            for (const pid of parents.get(node.id) || []) {
+                const ppos = positions.get(pid);
+                if (ppos) { sum += ppos.x; cnt++; }
+            }
+            desiredX.set(node.id, cnt > 0 ? sum / cnt : 0);
+        }
+        const sorted = [...nodesAtLevel].sort((a,b) => desiredX.get(a.id) - desiredX.get(b.id));
+        let lastX = -Infinity;
+        for (const node of sorted) {
+            let x = desiredX.get(node.id);
+            if (x < lastX + NODE_GAP) x = lastX + NODE_GAP;
+            lastX = x;
+            let y = Math.floor(currentLevel) * LEVEL_Y;
+            if (currentLevel % 1 !== 0) y += LEVEL_Y / 2;
+            positions.set(node.id, { x, y });
+        }
+    }
+    
+    let minX = Infinity, maxX = -Infinity;
+    for (const pos of positions.values()) { minX = Math.min(minX, pos.x); maxX = Math.max(maxX, pos.x); }
+    const centerOffset = -(minX + maxX) / 2;
+    for (const [id, pos] of positions.entries()) positions.set(id, { x: pos.x + centerOffset, y: pos.y });
+    return positions;
+}
+
+function calculateLayout(nodes, edges, rootId) {
+    const positions = new Map();
+    const PERSON_VERTICAL_SPACING = 180;
+    const UNION_VERTICAL_OFFSET = 90;
+    const MIN_HORIZONTAL_SPACING = NODE_WIDTH + 70;
+    
+    const nodeMap = new Map(); nodes.forEach(n => nodeMap.set(n.id, n));
+    const incoming = new Map(), outgoing = new Map();
+    nodes.forEach(n => { incoming.set(n.id, []); outgoing.set(n.id, []); });
+    edges.forEach(e => { outgoing.get(e.source).push(e.target); incoming.get(e.target).push(e.source); });
+    
+    const generation = new Map(); generation.set(rootId, 0);
+    const queue = [rootId];
+    while (queue.length) {
+        let currentId = queue.shift(), currentGen = generation.get(currentId);
+        for (let parentId of incoming.get(currentId)) {
+            let nextGen = currentGen + 1;
+            if (nodeMap.get(currentId)?.type === 'individual' && nodeMap.get(parentId)?.type === 'union') nextGen = currentGen + 0.5;
+            else if (nodeMap.get(currentId)?.type === 'union' && nodeMap.get(parentId)?.type === 'individual') nextGen = currentGen + 0.5;
+            if (!generation.has(parentId) || generation.get(parentId) < nextGen) { generation.set(parentId, nextGen); queue.push(parentId); }
+        }
+    }
+    
+    const nodesByGen = new Map();
+    nodes.forEach(n => { let g = generation.get(n.id) || 0; if (!nodesByGen.has(g)) nodesByGen.set(g, []); nodesByGen.get(g).push(n); });
+    const sortedGen = [...nodesByGen.keys()].sort((a,b)=>a-b);
+    
+    const rootLevelNodes = nodesByGen.get(0) || [];
+    let rootStartX = -((rootLevelNodes.length - 1) * MIN_HORIZONTAL_SPACING) / 2;
+    rootLevelNodes.forEach((node, idx) => { let y = node.type === 'union' ? -UNION_VERTICAL_OFFSET : 0; positions.set(node.id, { x: rootStartX + idx * MIN_HORIZONTAL_SPACING, y }); });
+    
+    for (let gen of sortedGen) {
+        if (gen === 0) continue;
+        const genNodes = nodesByGen.get(gen);
+        for (let node of genNodes) {
+            let childPositions = [];
+            for (let childId of outgoing.get(node.id) || []) { let cp = positions.get(childId); if (cp) childPositions.push(cp.x); }
+            let x = childPositions.length ? childPositions.reduce((a,b)=>a+b,0)/childPositions.length : 0;
+            let y = node.type === 'union' ? -(Math.floor(gen) * PERSON_VERTICAL_SPACING) - UNION_VERTICAL_OFFSET : -(gen * PERSON_VERTICAL_SPACING);
+            positions.set(node.id, { x, y });
+        }
+        let sortedNodes = [...genNodes].sort((a,b)=>positions.get(a.id).x - positions.get(b.id).x);
+        for (let pass = 0; pass < 12; pass++) {
+            let overlap = false;
+            for (let i = 0; i < sortedNodes.length - 1; i++) {
+                let cur = sortedNodes[i], nxt = sortedNodes[i+1];
+                let curX = positions.get(cur.id).x, nxtX = positions.get(nxt.id).x;
+                if (nxtX - curX < MIN_HORIZONTAL_SPACING) {
+                    overlap = true;
+                    let shift = (MIN_HORIZONTAL_SPACING - (nxtX - curX)) / 2;
+                    positions.set(cur.id, { x: curX - shift, y: positions.get(cur.id).y });
+                    positions.set(nxt.id, { x: nxtX + shift, y: positions.get(nxt.id).y });
+                }
+            }
+            if (!overlap) break;
+            sortedNodes = [...genNodes].sort((a,b)=>positions.get(a.id).x - positions.get(b.id).x);
+        }
+    }
+    
+    let minX = Infinity, maxX = -Infinity;
+    for (let pos of positions.values()) { minX = Math.min(minX, pos.x); maxX = Math.max(maxX, pos.x); }
+    let centerOffset = -(minX + maxX) / 2;
+    for (let [id, pos] of positions.entries()) positions.set(id, { x: pos.x + centerOffset, y: pos.y });
+    return positions;
+}
+
+// MODIFIED RENDER FUNCTION with text wrapping
+function renderAll(){
+
+    if(!currentGraphData) return;
+
+    linkContainer.selectAll("*").remove();
+    nodeContainer.selectAll("*").remove();
+
+    currentGraphData.edges.forEach(edge=>{
+        const sourcePos = currentPositions.get(edge.source);
+        const targetPos = currentPositions.get(edge.target);
+        if(sourcePos && targetPos){
+            const isParentToUnion = edge.type === 'parent-union';
+            const path = drawCurvedPath(sourcePos, targetPos, isParentToUnion);
+            const lineClass = isParentToUnion ? "link-parent-union" : "link-union-child";
+            linkContainer.append("path").attr("class",lineClass).attr("d",path);
+        }
+    });
+
+    currentGraphData.nodes.forEach(node=>{
+        const pos = currentPositions.get(node.id);
+        if(!pos) return;
+
+        const group = nodeContainer
+            .append("g")
+            .attr("class","node-group")
+            .attr("transform",`translate(${pos.x},${pos.y})`)
+            .call(d3.drag()
+                .on("drag",function(event,d){
+                    currentPositions.set(node.id,{x:event.x,y:event.y});
+                    d3.select(this).attr("transform",`translate(${event.x},${event.y})`);
+                    renderAll();
+                })
+            )
+            .on("click",async ()=>{
+                if(node.type === 'individual'){
+                    await loadPersonDetails(node.id);
+                }
+            });
+
+        if(node.type === 'union'){
+            group.append("circle")
+                .attr("r",UNION_RADIUS)
+                .attr("fill","#6aa9ff")
+                .attr("stroke","#fff")
+                .attr("stroke-width",1.5);
+        }else{
+            // Colors: Blue for male, Rose/Pink for female, Gray for unknown
+            const color = node.gender === 'male' ? "#3b82f6" 
+                        : node.gender === 'female' ? "#f06292" 
+                        : "#6b7280";
+            const stroke = node.gender === 'male' ? "#60a5fa" 
+                         : node.gender === 'female' ? "#f8bbd0" 
+                         : "#9ca3af";
+            const strokeWidth = node.id === currentRootId ? 3 : 2;
+
+            group.append("rect")
+                .attr("x",-NODE_WIDTH/2)
+                .attr("y",-NODE_HEIGHT/2)
+                .attr("width",NODE_WIDTH)
+                .attr("height",NODE_HEIGHT)
+                .attr("rx",8)
+                .attr("fill",color)
+                .attr("stroke",stroke)
+                .attr("stroke-width",strokeWidth);
+
+            // WRAP THE NAME - split into multiple lines
+            const fullName = node.name || "Unknown";
+            const nameLines = wrapText(fullName, 18); // 18 characters per line max
+            
+            // Calculate starting Y position based on number of lines
+            const lineHeight = 14;
+            const startY = -8 - ((nameLines.length - 1) * lineHeight / 2);
+            
+            // Add each line of the name
+            nameLines.forEach((line, index) => {
+                group.append("text")
+                    .attr("x",0)
+                    .attr("y",startY + (index * lineHeight))
+                    .attr("text-anchor","middle")
+                    .attr("fill","white")
+                    .attr("font-size","10px")
+                    .attr("font-weight","500")
+                    .text(line);
+            });
+
+            // Formatted dates
+            const birthFormatted = formatDisplayDate(node.birth);
+            const deathFormatted = formatDisplayDate(node.death);
+            let dateStr = "";
+            if(birthFormatted && deathFormatted){
+                dateStr = `${birthFormatted} – ${deathFormatted}`;
+            }else if(birthFormatted){
+                dateStr = `${birthFormatted}`;
+            }else if(deathFormatted){
+                dateStr = `${deathFormatted}`;
+            }
+
+            if(dateStr){
+                // Position date below the name lines
+                const dateY = startY + (nameLines.length * lineHeight) + 4;
+                group.append("text")
+                    .attr("x",0)
+                    .attr("y",dateY)
+                    .attr("text-anchor","middle")
+                    .attr("fill","#e0e0e0")
+                    .attr("font-size","8px")
+                    .text(dateStr);
+            }
+        }
+    });
+}
+
+async function loadGraphWithSpouse(personId, depth, includeSpouse) {
+    showToast(`Loading ${currentMode}...`, 2000);
+    
+    const personResponse = await fetch(`/api/person/${personId}`);
+    const person = await personResponse.json();
+    currentPersonData = person;
+    
+    const response = await fetch(`/api/graph/${personId}?direction=${currentMode}&depth=${Math.min(depth, 100)}`);
+    const data = await response.json();
+    
+    if(data.success) {
+        currentRootId = personId;
+        
+        if(currentMode === 'descendants' && includeSpouse && person.spouses && person.spouses.length > 0) {
+            const spouseId = person.spouses[0].id;
+            const spouseResponse = await fetch(`/api/graph/${spouseId}?direction=${currentMode}&depth=${Math.min(depth, 100)}`);
+            const spouseData = await spouseResponse.json();
+            
+            if(spouseData.success) {
+                const mergedNodes = [...data.nodes];
+                const mergedEdges = [...data.edges];
+                for (const node of spouseData.nodes) if (!mergedNodes.find(n => n.id === node.id)) mergedNodes.push(node);
+                for (const edge of spouseData.edges) if (!mergedEdges.find(e => e.source === edge.source && e.target === edge.target)) mergedEdges.push(edge);
+                currentGraphData = { nodes: mergedNodes, edges: mergedEdges, rootId: personId };
+            } else { currentGraphData = data; }
+        } else { currentGraphData = data; }
+        
+        if(currentMode === 'descendants') {
+            currentPositions = calculateDescendantTopDownLayout(currentGraphData.nodes, currentGraphData.edges, currentRootId);
+        } else {
+            currentPositions = calculateLayout(currentGraphData.nodes, currentGraphData.edges, currentRootId);
+        }
+        
+        renderAll();
+        setTimeout(() => fitToView(), 100);
+        
+        showToast(
+            `Loaded ${currentGraphData.nodes.filter(n => n.type === 'individual').length} people`,
+            2000
+        );
+    } else {
+        showToast('No data found', 2000);
+    }
+}
+
+async function loadPersonDetails(personId){
+
+    const response =
+        await fetch(`/api/person/${personId}`);
+
+    const person = await response.json();
+
+    const depth =
+        document.getElementById('depthInput').value;
+
+    const spouseButton = person.spouses && person.spouses.length > 0 && currentMode === 'descendants' 
+        ? `<button class="btn-primary" style="margin-top:8px;background:rgba(0,255,255,0.2);"
+                onclick="loadGraphWithSpouse('${person.id}', ${depth}, true)">
+            💑 View with Spouse
+        </button>`
+        : '';
+
+    document.getElementById('sidebarContent').innerHTML = `
+
+        <div class="person-card">
+
+            <div class="person-avatar">
+                ${person.gender === 'male' ? '♂️' : '♀️'}
+            </div>
+
+            <div class="person-name">
+                ${escapeHtml(person.name)}
+            </div>
+
+            <div class="person-dates">
+                📅 ${person.birth || 'Unknown'}
+                —
+                ⚰️ ${person.death || 'Unknown'}
+            </div>
+
+        </div>
+
+        <button class="btn-primary"
+                onclick="loadGraphWithSpouse('${person.id}', ${depth}, ${includeSpouseInView})">
+
+            🌳 View ${currentMode}
+
+        </button>
+        
+        ${spouseButton}
+
+        <div class="info-section">
+
+            <div class="info-label">
+                Parents (${person.parents.length})
+            </div>
+
+            <div class="relation-list">
+
+                ${
+                    person.parents.map(p=>`
+                        <li onclick="loadPersonDetails('${p.id}')">
+                            👤 ${escapeHtml(p.name)}
+                        </li>
+                    `).join('') || '<div>None</div>'
+                }
+
+            </div>
+
+        </div>
+
+        <div class="info-section">
+
+            <div class="info-label">
+                Spouses (${person.spouses.length})
+            </div>
+
+            <div class="relation-list">
+
+                ${
+                    person.spouses.map(s=>`
+                        <li onclick="loadGraphWithSpouse('${s.id}', ${depth}, true)">
+                            💑 ${escapeHtml(s.name)}
+                        </li>
+                    `).join('') || '<div>None</div>'
+                }
+
+            </div>
+
+        </div>
+
+        <div class="info-section">
+
+            <div class="info-label">
+                Children (${person.children.length})
+            </div>
+
+            <div class="relation-list">
+
+                ${
+                    person.children.map(c=>`
+                        <li onclick="loadPersonDetails('${c.id}')">
+                            👶 ${escapeHtml(c.name)}
+                        </li>
+                    `).join('') || '<div>None</div>'
+                }
+
+            </div>
+
+        </div>
+        
+        <button class="btn-primary" style="margin-top:16px;background:linear-gradient(135deg,#ff6b6b,#a855f7);"
+                onclick="findConnectionFromSidebar('${person.id}')">
+            🔗 Find connection from this person
+        </button>
+    `;
+
+    document.getElementById('sidebar')
+        .classList.add('open');
+}
+
+async function findConnectionFromSidebar(personId) {
+    openPathFinder();
+    // Pre-fill person 1
+    const person = allPeopleMap.get(personId);
+    if (person) {
+        pathFinderPerson1 = { id: person.id, name: person.name };
+        document.getElementById('pathPerson1Display').innerHTML = `✅ ${escapeHtml(person.name)}`;
+    }
+}
+
+async function loadAllPeople(){
+
+    try{
+
+        const response =
+            await fetch('/api/search?q=');
+
+        const results =
+            await response.json();
+
+        allPeople = results;
+        
+        allPeopleMap.clear();
+        for (const person of results) {
+            const detailResponse = await fetch(`/api/person/${person.id}`);
+            const fullPerson = await detailResponse.json();
+            allPeopleMap.set(person.id, fullPerson);
+        }
+
+        document.getElementById('stats')
+            .innerHTML =
+            `👥 ${allPeople.length} people`;
+
+    }catch(e){
+
+        console.error(e);
+    }
+}
+
+async function searchPeople(query){
+
+    if(query.length < 2){
+
+        document.getElementById('searchResults')
+            .style.display = 'none';
+
+        return;
+    }
+
+    const results =
+        allPeople
+            .filter(
+                p=>
+                    p.name &&
+                    p.name.toLowerCase()
+                        .includes(query.toLowerCase())
+            )
+            .slice(0,1000);
+
+    const div =
+        document.getElementById('searchResults');
+
+    if(results.length){
+
+        div.innerHTML =
+            results.map(r=>`
+                <div class="search-result-item"
+                     onclick="selectPerson('${r.id}')">
+
+                    <strong>
+                        ${escapeHtml(r.name)}
+                    </strong>
+
+                    ${
+                        r.birth
+                            ? ` (📅 ${r.birth})`
+                            : ''
+                    }
+
+                </div>
+            `).join('');
+
+    }else{
+
+        div.innerHTML =
+            '<div class="search-result-item">No matches</div>';
+    }
+
+    div.style.display = 'block';
+}
+
+async function selectPerson(personId){
+
+    document.getElementById('searchResults')
+        .style.display = 'none';
+
+    document.getElementById('searchInput')
+        .value = '';
+
+    await loadGraphWithSpouse(
+        personId,
+        parseInt(document.getElementById('depthInput').value),
+        includeSpouseInView
+    );
+}
+
+function closeSidebar(){
+
+    document.getElementById('sidebar')
+        .classList.remove('open');
+}
+
+function showToast(msg,dur=3000){
+
+    const toast =
+        document.getElementById('toast');
+
+    toast.textContent = msg;
+
+    toast.style.display = 'block';
+
+    setTimeout(()=>{
+        toast.style.display='none';
+    },dur);
+}
+
+function escapeHtml(text){
+
+    if(!text) return '';
+
+    const div =
+        document.createElement('div');
+
+    div.textContent = text;
+
+    return div.innerHTML;
+}
+
+// Toggle spouse button
+document.getElementById('toggleSpouseBtn').addEventListener('click', () => {
+    includeSpouseInView = !includeSpouseInView;
+    const btn = document.getElementById('toggleSpouseBtn');
+    if (includeSpouseInView) {
+        btn.style.background = 'rgba(0,255,255,0.2)';
+        btn.innerHTML = '👥 Show Spouse';
+    } else {
+        btn.style.background = 'rgba(255,0,0,0.2)';
+        btn.innerHTML = '👤 Hide Spouse';
+    }
+    
+    if (currentRootId) {
+        loadGraphWithSpouse(currentRootId, 
+            parseInt(document.getElementById('depthInput').value), 
+            includeSpouseInView);
+    }
+});
+
+document.getElementById('gedcomInput')
+    .addEventListener('change',async(e)=>{
+
+        const file = e.target.files[0];
+
+        if(!file) return;
+
+        const formData = new FormData();
+
+        formData.append('file',file);
+
+        try{
+
+            const response =
+                await fetch('/api/load',{
+                    method:'POST',
+                    body:formData
+                });
+
+            const result =
+                await response.json();
+
+            if(result.success){
+
+                await loadAllPeople();
+
+                showToast(
+                    `Loaded ${result.stats.people} people — search a person to begin`,
+                    4000
+                );
+            }
+
+        }catch(err){
+
+            showToast(
+                'Error: '+err.message,
+                4000
+            );
+        }
+    });
+
+document.getElementById('depthInput')
+    .addEventListener('change',async()=>{
+
+        if(currentRootId){
+
+            await loadGraphWithSpouse(
+                currentRootId,
+                parseInt(document.getElementById('depthInput').value),
+                includeSpouseInView
+            );
+        }
+    });
+
+let searchTimeout;
+
+document.getElementById('searchInput')
+    .addEventListener('input',(e)=>{
+
+        clearTimeout(searchTimeout);
+
+        if(e.target.value.length >= 2){
+
+            searchTimeout =
+                setTimeout(
+                    ()=>searchPeople(e.target.value),
+                    300
+                );
+
+        }else{
+
+            document.getElementById('searchResults')
+                .style.display='none';
+        }
+    });
+
+document.addEventListener('click',(e)=>{
+
+    if(!e.target.closest('.search-container')){
+
+        document.getElementById('searchResults')
+            .style.display='none';
+    }
+});
+
+initSVG();
+
+showToast(
+    '✨ Ready! Load a GEDCOM file',
+    4000
+);
+
+</script>
+
+</body>
+</html>
